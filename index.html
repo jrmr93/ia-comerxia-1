@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Comerxia System</title>
+    <meta name="description" content="Comerxia App - Sistema de gestión comercial automatizado para inventario y proveedores." />
+    <meta property="og:title" content="Comerxia App - Sistema de Gestión Comercial" />
+    <meta property="og:description" content="Sistema de gestión comercial con sincronización de inventario y proveedores." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      (function() {
+        // Safe storage shim for restrictive iframe sandboxes
+        try {
+          var testK = '__chk_storage__';
+          window.localStorage.setItem(testK, '1');
+          window.localStorage.removeItem(testK);
+        } catch (err) {
+          var localMemory = {};
+          try {
+            Object.defineProperty(window, 'localStorage', {
+              value: {
+                getItem: function(k) { return Object.prototype.hasOwnProperty.call(localMemory, k) ? localMemory[k] : null; },
+                setItem: function(k, v) { localMemory[k] = String(v); },
+                removeItem: function(k) { delete localMemory[k]; },
+                clear: function() { localMemory = {}; },
+                key: function(i) { return Object.keys(localMemory)[i] || null; },
+                get length() { return Object.keys(localMemory).length; }
+              },
+              configurable: true,
+              writable: true
+            });
+          } catch (defineErr) {}
+        }
+
+        try {
+          var testS = '__chk_sess_storage__';
+          window.sessionStorage.setItem(testS, '1');
+          window.sessionStorage.removeItem(testS);
+        } catch (err) {
+          var sessionMemory = {};
+          try {
+            Object.defineProperty(window, 'sessionStorage', {
+              value: {
+                getItem: function(k) { return Object.prototype.hasOwnProperty.call(sessionMemory, k) ? sessionMemory[k] : null; },
+                setItem: function(k, v) { sessionMemory[k] = String(v); },
+                removeItem: function(k) { delete sessionMemory[k]; },
+                clear: function() { sessionMemory = {}; },
+                key: function(i) { return Object.keys(sessionMemory)[i] || null; },
+                get length() { return Object.keys(sessionMemory).length; }
+              },
+              configurable: true,
+              writable: true
+            });
+          } catch (defineErr) {}
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" crossorigin="anonymous" src="/src/main.tsx"></script>
+  </body>
+</html>
+

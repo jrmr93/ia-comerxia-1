@@ -1,0 +1,8 @@
+{
+  "name": "Comerxia System",
+  "description": "Sistema automatizado para procesar fotos y descripciones de proveedores en Telegram y crear inventario en base de datos PostgreSQL local.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
