@@ -1,7 +1,12 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
 
 let activeCustomApiKey: string | null = null;
 let aiInstance: GoogleGenAI | null = null;
+
+// In-memory cache for fast repeated marketing copies and descriptions
+const copyCache = new Map<string, { data: any; timestamp: number }>();
+const descCache = new Map<string, { text: string; timestamp: number }>();
+const CACHE_TTL_MS = 20 * 60 * 1000; // 20 minutes
 
 export function setCustomAiApiKey(key: string | null) {
   activeCustomApiKey = key && key.trim().length > 0 ? key.trim() : null;
@@ -47,7 +52,7 @@ export function getAiClient(customKey?: string): GoogleGenAI {
  */
 export async function testGeminiApiKey(
   apiKey?: string,
-  modelName: string = 'gemini-3.7-flash'
+  modelName: string = 'gemini-3.1-flash-lite'
 ): Promise<{
   success: boolean;
   model: string;
@@ -58,14 +63,15 @@ export async function testGeminiApiKey(
   const startTime = Date.now();
   const keyToTest = apiKey?.trim() || activeCustomApiKey || process.env.GEMINI_API_KEY;
 
-  // Normalize legacy or deprecated model names
-  let activeModel = modelName || 'gemini-3.7-flash';
+  // Normalize legacy or deprecated model names to fastest ultra-responsive model
+  let activeModel = modelName || 'gemini-3.1-flash-lite';
   if (
     activeModel.includes('gemini-2.5') ||
     activeModel.includes('gemini-2.0') ||
-    activeModel.includes('gemini-1.5')
+    activeModel.includes('gemini-1.5') ||
+    activeModel.includes('gemini-3.6')
   ) {
-    activeModel = 'gemini-3.7-flash';
+    activeModel = 'gemini-3.1-flash-lite';
   }
 
   if (!keyToTest) {
@@ -79,9 +85,8 @@ export async function testGeminiApiKey(
 
   let modelsToTry = [
     activeModel,
-    'gemini-3.7-flash',
-    'gemini-3.6-flash',
     'gemini-3.1-flash-lite',
+    'gemini-3.7-flash',
     'gemini-flash-latest',
   ];
   modelsToTry = Array.from(new Set(modelsToTry.filter(Boolean)));
@@ -103,6 +108,9 @@ export async function testGeminiApiKey(
         contents: 'Responde estrictamente en una sola palabra: "CONECTADO"',
         config: {
           temperature: 0.1,
+          thinkingConfig: {
+            thinkingLevel: ThinkingLevel.MINIMAL,
+          },
         },
       });
 
@@ -178,11 +186,12 @@ export interface ParsedProductResult {
 
 /**
  * Resolves an image input (Data URI, HTTP/HTTPS URL, or raw base64) into
- * clean base64 data and a valid MIME type for Gemini inlineData.
+ * clean base64 data and a valid MIME type for Gemini inlineData with strict timeout.
  */
 async function resolveImageToPart(
   photoInput?: string,
-  fallbackMime: string = 'image/jpeg'
+  fallbackMime: string = 'image/jpeg',
+  timeoutMs: number = 3500
 ): Promise<{ data: string; mimeType: string } | null> {
   if (!photoInput || typeof photoInput !== 'string') return null;
 
@@ -207,12 +216,21 @@ async function resolveImageToPart(
       }
     }
 
-    // 2. HTTP / HTTPS URL
+    // 2. HTTP / HTTPS URL with fast timeout controller
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
       try {
-        const response = await fetch(trimmed);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        const response = await fetch(trimmed, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+        });
+        clearTimeout(timeoutId);
+
         if (!response.ok) {
-          console.warn(`Could not fetch image URL for Gemini analysis: ${trimmed} (${response.status})`);
           return null;
         }
         const contentType = response.headers.get('content-type') || fallbackMime;
@@ -225,7 +243,6 @@ async function resolveImageToPart(
           mimeType: mimeType.startsWith('image/') ? mimeType : fallbackMime,
         };
       } catch (fetchErr) {
-        console.warn('Network error while downloading image for Gemini parsing:', fetchErr);
         return null;
       }
     }
@@ -241,7 +258,6 @@ async function resolveImageToPart(
 
     return null;
   } catch (error) {
-    console.warn('Error resolving image for Gemini analysis:', error);
     return null;
   }
 }
@@ -508,14 +524,18 @@ ${caption || '(Sin texto en el mensaje, analizar las fotos adjuntas del producto
 
     const contents: any[] = [];
 
-    // Safely resolve all images provided (whether URLs, Data URIs or base64)
-    for (const photo of photoList) {
-      const resolvedImage = await resolveImageToPart(photo, photoMimeType || 'image/jpeg');
-      if (resolvedImage && resolvedImage.data) {
+    // Safely resolve primary images in parallel (up to 3 images for ultra-fast intake without bloating payload)
+    const imagesToResolve = photoList.slice(0, 3);
+    const resolvedImages = await Promise.all(
+      imagesToResolve.map((photo) => resolveImageToPart(photo, photoMimeType || 'image/jpeg', 3000))
+    );
+
+    for (const resolved of resolvedImages) {
+      if (resolved && resolved.data) {
         contents.push({
           inlineData: {
-            data: resolvedImage.data,
-            mimeType: resolvedImage.mimeType,
+            data: resolved.data,
+            mimeType: resolved.mimeType,
           },
         });
       }
@@ -523,11 +543,10 @@ ${caption || '(Sin texto en el mensaje, analizar las fotos adjuntas del producto
 
     contents.push(prompt);
 
-  // Prioritize high-availability models with fast response and robust fallback
+  // Prioritize high-performance, low-latency models with fast structured output
   const candidateModels = [
-    'gemini-3.7-flash',
-    'gemini-3.6-flash',
     'gemini-3.1-flash-lite',
+    'gemini-3.7-flash',
     'gemini-flash-latest',
   ];
 
@@ -538,6 +557,9 @@ ${caption || '(Sin texto en el mensaje, analizar las fotos adjuntas del producto
         contents,
         config: {
           responseMimeType: 'application/json',
+          thinkingConfig: {
+            thinkingLevel: ThinkingLevel.LOW,
+          },
           responseSchema: {
             type: Type.OBJECT,
             properties: {
@@ -594,7 +616,7 @@ ${caption || '(Sin texto en el mensaje, analizar las fotos adjuntas del producto
               'tags',
             ],
           },
-          temperature: 0.2,
+          temperature: 0.1,
         },
       });
 
@@ -951,11 +973,17 @@ ${!showSku ? '⚠️ REGLA CRÍTICA: NO incluyas ninguna mención de SKU ni cód
 Responde ÚNICAMENTE en formato JSON con la siguiente estructura.`;
 
     const candidateModels = [
-      'gemini-3.7-flash',
-      'gemini-3.6-flash',
       'gemini-3.1-flash-lite',
+      'gemini-3.7-flash',
       'gemini-flash-latest',
     ];
+
+    // Check fast memory cache first
+    const cacheKey = `${product.name}_${product.sku || ''}_${priceVal}_${tone}_${showStock}_${showPhone}_${showSku}_${showWebsite}`;
+    const cachedEntry = copyCache.get(cacheKey);
+    if (cachedEntry && Date.now() - cachedEntry.timestamp < CACHE_TTL_MS) {
+      return cachedEntry.data;
+    }
 
     for (const modelName of candidateModels) {
       try {
@@ -964,6 +992,9 @@ Responde ÚNICAMENTE en formato JSON con la siguiente estructura.`;
           contents: prompt,
           config: {
             responseMimeType: 'application/json',
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.LOW,
+            },
             responseSchema: {
               type: Type.OBJECT,
               properties: {
@@ -991,7 +1022,7 @@ Responde ÚNICAMENTE en formato JSON con la siguiente estructura.`;
               },
               required: ['universalDescription', 'title'],
             },
-            temperature: 0.3,
+            temperature: 0.2,
           },
         });
 
@@ -1019,6 +1050,8 @@ Responde ÚNICAMENTE en formato JSON con la siguiente estructura.`;
             parsed.showWebsite = showWebsite;
             parsed.websiteUrl = websiteUrl || undefined;
             parsed.savedAt = new Date().toISOString();
+
+            copyCache.set(cacheKey, { data: parsed, timestamp: Date.now() });
             return parsed;
           }
         }
@@ -1070,6 +1103,12 @@ export async function generateProductCommercialDescription(
     images,
   } = input;
 
+  const descCacheKey = `${name}_${category}_${(rawTelegramMessage || description || '').slice(0, 50)}`;
+  const cachedDesc = descCache.get(descCacheKey);
+  if (cachedDesc && Date.now() - cachedDesc.timestamp < CACHE_TTL_MS) {
+    return cachedDesc.text;
+  }
+
   const photoList: string[] = [];
   if (imageUrl && imageUrl.trim()) photoList.push(imageUrl.trim());
   if (Array.isArray(images)) {
@@ -1120,9 +1159,13 @@ REGLAS OBLIGATORIAS DE REDACCIÓN:
     const ai = getAiClient();
     const contents: any[] = [];
 
-    // Safely attach images if any
-    for (const photo of photoList.slice(0, 4)) {
-      const resolved = await resolveImageToPart(photo);
+    // Safely attach top 2 images in parallel with strict timeout for ultra-fast response
+    const imagesToResolve = photoList.slice(0, 2);
+    const resolvedImages = await Promise.all(
+      imagesToResolve.map((photo) => resolveImageToPart(photo, 'image/jpeg', 2500))
+    );
+
+    for (const resolved of resolvedImages) {
       if (resolved && resolved.data) {
         contents.push({
           inlineData: {
@@ -1136,9 +1179,8 @@ REGLAS OBLIGATORIAS DE REDACCIÓN:
     contents.push(prompt);
 
     const candidateModels = [
-      'gemini-3.7-flash',
-      'gemini-3.6-flash',
       'gemini-3.1-flash-lite',
+      'gemini-3.7-flash',
       'gemini-flash-latest',
     ];
 
@@ -1148,12 +1190,16 @@ REGLAS OBLIGATORIAS DE REDACCIÓN:
           model: modelName,
           contents,
           config: {
-            temperature: 0.3,
+            temperature: 0.2,
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.LOW,
+            },
           },
         });
 
         const text = response.text?.trim();
         if (text && text.length > 20) {
+          descCache.set(descCacheKey, { text, timestamp: Date.now() });
           return text;
         }
       } catch (err: any) {

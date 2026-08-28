@@ -420,8 +420,10 @@ export const GoogleAiConfigModal: React.FC<GoogleAiConfigModalProps> = ({
                   onChange={(e) => setModelName(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-amber-500"
                 >
-                  <option value="gemini-3.7-flash">gemini-3.7-flash (Recomendado - Ultra Rápido & Preciso)</option>
-                  <option value="gemini-3.7-pro">gemini-3.7-pro (Máxima Capacidad de Razonamiento)</option>
+                  <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Ultra Rápido & Baja Latencia)</option>
+                  <option value="gemini-3.7-flash">gemini-3.7-flash (Recomendado - Alta Inteligencia & Rapidez)</option>
+                  <option value="gemini-flash-latest">gemini-flash-latest (Versión Estable Flash)</option>
+                  <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Máximo Razonamiento)</option>
                 </select>
               </div>
 
@@ -681,10 +683,10 @@ export const GoogleAiConfigModal: React.FC<GoogleAiConfigModalProps> = ({
                 </label>
                 <div className="space-y-1.5">
                   {[
-                    { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash (Recomendado)', tag: 'Avanzado, Rápido y Alta Precisión' },
-                    { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', tag: 'Alta Velocidad, Concurrencia y Estabilidad' },
-                    { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite', tag: 'Ultra Rápido y Bajo Consumo' },
-                    { id: 'gemini-flash-latest', name: 'Gemini Flash Latest', tag: 'Última Versión Estable General' },
+                    { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (Ultra Rápido)', tag: 'Mínima latencia (<1s), ideal para alto volumen' },
+                    { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash (Recomendado)', tag: 'Avanzado, inteligente y de respuesta veloz' },
+                    { id: 'gemini-flash-latest', name: 'Gemini Flash Latest', tag: 'Última versión estable general de Flash' },
+                    { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview', tag: 'Máxima capacidad de razonamiento complejo' },
                   ].map((m) => (
                     <label
                       key={m.id}

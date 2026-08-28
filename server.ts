@@ -3103,6 +3103,21 @@ async function startServer() {
       console.warn('[Telegram Bot] Could not auto-start bot polling on boot:', botBootErr);
     }
 
+    // Automatically load AI configuration and set active Gemini API key
+    try {
+      const aiConfig = await getAiConfig(1);
+      const activeKey = aiConfig?.apiKey || process.env.GEMINI_API_KEY;
+      if (activeKey && activeKey.trim()) {
+        setCustomAiApiKey(activeKey.trim());
+        process.env.GEMINI_API_KEY = activeKey.trim();
+        console.log('[Google Gemini AI] Clave API cargada y activada correctamente.');
+      } else {
+        console.log('[Google Gemini AI] Clave API pendiente de configuración.');
+      }
+    } catch (aiBootErr) {
+      console.warn('[Google Gemini AI] Nota al cargar configuración inicial de IA:', aiBootErr);
+    }
+
     // Background automatic self-hosted image synchronization for any external images
     setTimeout(async () => {
       try {

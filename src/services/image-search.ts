@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
 import { getAiClient } from './gemini-parser.ts';
 
 export interface WebImageResult {
@@ -147,11 +147,10 @@ Devuelve JSON:
   "recommendedQueries": ["query 1", "query 2", "query 3", "query 4"]
 }`;
 
-  // Candidate models (prefer modern Gemini 3.x Flash models for efficiency, high throughput and stability)
+  // Candidate models (prefer modern Gemini 3.x Flash models with low latency)
   const candidateModels = [
-    'gemini-3.7-flash',
-    'gemini-3.6-flash',
     'gemini-3.1-flash-lite',
+    'gemini-3.7-flash',
     'gemini-flash-latest',
   ];
 
@@ -164,6 +163,9 @@ Devuelve JSON:
         config: {
           responseMimeType: 'application/json',
           temperature: 0.1,
+          thinkingConfig: {
+            thinkingLevel: ThinkingLevel.LOW,
+          },
           responseSchema: {
             type: Type.OBJECT,
             properties: {

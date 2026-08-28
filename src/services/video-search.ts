@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { getAiClient } from './gemini-parser.ts';
 import { parseVideoUrl, ParsedVideoInfo } from '../utils/video-helper.ts';
 
@@ -223,7 +223,7 @@ export async function searchProductVideos(params: {
 
   try {
     const ai = getAiClient();
-    const candidateModels = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+    const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.7-flash', 'gemini-flash-latest'];
     const prompt = `Analiza este producto y extrae la Marca exacta y el Modelo exacto para búsqueda de videos:
 Producto: ${cleanName}
 Categoría: ${cat}
@@ -241,7 +241,12 @@ Devuelve únicamente JSON:
         const response = await ai.models.generateContent({
           model,
           contents: prompt,
-          config: { responseMimeType: 'application/json' },
+          config: {
+            responseMimeType: 'application/json',
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.LOW,
+            },
+          },
         });
         const text = response.text?.trim();
         if (text) {
